@@ -1,0 +1,7 @@
+{
+  "name": "dAUXimity",
+  "description": "A retro-aesthetic live audio streaming platform. Create rooms, stream browser audio, and chat in real-time.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
