@@ -68,11 +68,21 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
        }]);
     });
 
+    // --- Handshake for existing listeners ---
+    socket.on(SocketEvents.HOST_START_STREAM, () => {
+      // If we are a listener, request connection
+      if (!user.isHost) {
+        console.log('Host started streaming, requesting connection...');
+        socket.emit(SocketEvents.LISTENER_REQUEST_CONNECTION, { roomId: room.id });
+      }
+    });
+
     return () => {
       socket.off(SocketEvents.NEW_MESSAGE);
       socket.off(SocketEvents.USER_LEFT);
+      socket.off(SocketEvents.HOST_START_STREAM);
     };
-  }, [socket]);
+  }, [socket, user.isHost, room.id]);
 
   // --- HOST Logic: File Streaming ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,13 +125,8 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       localStreamRef.current = stream;
       setIsStreaming(true);
       
-      // Connect to existing peers in the room
-      socket.emit('request-active-listeners', room.id, (listenerIds: string[]) => {
-        console.log('Connecting to existing listeners:', listenerIds);
-        listenerIds.forEach(userId => {
-          handleUserJoined({ userId });
-        });
-      });
+      // Notify waiting listeners that we are ready
+      socket.emit(SocketEvents.HOST_START_STREAM, { roomId: room.id });
       
     } catch (err: any) {
       console.error("Error processing audio file:", err);
@@ -248,13 +253,8 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       localStreamRef.current = audioStream;
       setIsStreaming(true);
 
-      // Connect to existing peers in the room
-      socket.emit('request-active-listeners', room.id, (listenerIds: string[]) => {
-        console.log('Connecting to existing listeners:', listenerIds);
-        listenerIds.forEach(userId => {
-          handleUserJoined({ userId });
-        });
-      });
+      // Notify waiting listeners that we are ready
+      socket.emit(SocketEvents.HOST_START_STREAM, { roomId: room.id });
 
     } catch (err: any) {
       console.error("Error starting stream:", err);
@@ -363,10 +363,17 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
 
     socket.on(SocketEvents.USER_JOINED, handleUserJoined);
     socket.on(SocketEvents.WEBRTC_SIGNAL, handleSignal);
+    
+    // Handle listener requesting connection (e.g. after host start stream signal)
+    socket.on(SocketEvents.LISTENER_REQUEST_CONNECTION, ({ listenerId }: { listenerId: string }) => {
+       console.log(`Listener ${listenerId} requested connection`);
+       handleUserJoined({ userId: listenerId });
+    });
 
     return () => {
       socket.off(SocketEvents.USER_JOINED);
       socket.off(SocketEvents.WEBRTC_SIGNAL);
+      socket.off(SocketEvents.LISTENER_REQUEST_CONNECTION);
     };
   }, [socket, user.isHost, createPeerConnection]);
 

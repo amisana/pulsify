@@ -39,5 +39,7 @@ export enum SocketEvents {
   WEBRTC_SIGNAL = 'webrtc-signal',
   USER_JOINED = 'user-joined', // Notify host
   USER_LEFT = 'user-left',
+  HOST_START_STREAM = 'host-start-stream',
+  LISTENER_REQUEST_CONNECTION = 'listener-request-connection',
   ERROR = 'error'
 }

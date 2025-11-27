@@ -56,8 +56,8 @@ const App: React.FC = () => {
     socket.emit(SocketEvents.CREATE_ROOM, roomName, (room: Room) => {
       setShowJackIn(true); // Trigger sequence for room entry
       setTimeout(() => {
-        setCurrentRoom(room);
-        setUser(prev => prev ? { ...prev, isHost: true } : null);
+      setCurrentRoom(room);
+      setUser(prev => prev ? { ...prev, isHost: true } : null);
       }, 500); // Small delay so overlay appears first
     });
   };
@@ -68,8 +68,8 @@ const App: React.FC = () => {
       if (response.success) {
         setShowJackIn(true); // Trigger sequence for room entry
         setTimeout(() => {
-          setCurrentRoom(response.room);
-          setUser(prev => prev ? { ...prev, isHost: false } : null);
+        setCurrentRoom(response.room);
+        setUser(prev => prev ? { ...prev, isHost: false } : null);
         }, 500);
       } else {
         alert(response.message || "Failed to join room. It may have been destroyed.");
@@ -101,27 +101,27 @@ const App: React.FC = () => {
         <JackInOverlay onComplete={() => setShowJackIn(false)} />
       )}
 
-      <Layout 
-        isConnected={isConnected} 
-        userId={user?.id}
-        onLeave={currentRoom ? handleLeaveRoom : undefined}
-        inRoom={!!currentRoom}
-      >
-        {currentRoom ? (
-          <RoomView 
-            socket={socket!} 
-            room={currentRoom} 
-            user={user!} 
-            onLeave={handleLeaveRoom}
-          />
-        ) : (
-          <Lobby 
-            rooms={activeRooms} 
-            onCreateRoom={handleCreateRoom} 
-            onJoinRoom={handleJoinRoom} 
-          />
-        )}
-      </Layout>
+    <Layout 
+      isConnected={isConnected} 
+      userId={user?.id}
+      onLeave={currentRoom ? handleLeaveRoom : undefined}
+      inRoom={!!currentRoom}
+    >
+      {currentRoom ? (
+        <RoomView 
+          socket={socket!} 
+          room={currentRoom} 
+          user={user!} 
+          onLeave={handleLeaveRoom}
+        />
+      ) : (
+        <Lobby 
+          rooms={activeRooms} 
+          onCreateRoom={handleCreateRoom} 
+          onJoinRoom={handleJoinRoom} 
+        />
+      )}
+    </Layout>
     </>
   );
 };

@@ -81,18 +81,6 @@ io.on('connection', (socket) => {
     broadcastLobbyUpdate();
   });
 
-  // Host asks for list of listeners to connect to (e.g. when starting stream late)
-  socket.on('request-active-listeners', (roomId, callback) => {
-    const room = rooms.get(roomId);
-    if (room && room.hostId === socket.id) {
-      // Return all listener IDs except the host
-      const listeners = Array.from(room.listeners).filter(id => id !== socket.id);
-      callback(listeners);
-    } else {
-      callback([]);
-    }
-  });
-
   socket.on('leave-room', (roomId) => {
     handleLeaveRoom(socket, roomId);
   });
@@ -106,6 +94,20 @@ io.on('connection', (socket) => {
       payload,
       senderId: socket.id
     });
+  });
+
+  // --- Stream Handshake ---
+  socket.on('host-start-stream', ({ roomId }) => {
+    // Notify everyone in the room that the host started streaming
+    socket.to(roomId).emit('host-start-stream');
+  });
+
+  socket.on('listener-request-connection', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (room && room.hostId) {
+      // Notify the host that a listener wants to connect
+      io.to(room.hostId).emit('listener-request-connection', { listenerId: socket.id });
+    }
   });
 
   // --- Chat ---
