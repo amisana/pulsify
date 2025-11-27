@@ -115,12 +115,13 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       localStreamRef.current = stream;
       setIsStreaming(true);
       
-      // Initiate connections with existing peers or wait for joins
-      // For existing peers (if any logic existed to track them), we would add tracks here.
-      // Since we rely on reactive 'user-joined', this works for new joins.
-      // For immediate update if users are already there:
-      // In a real app, we'd iterate connected users and renegotiate. 
-      // Here, we rely on the fact that if we start streaming, we might need to signal "ready".
+      // Connect to existing peers in the room
+      socket.emit('request-active-listeners', room.id, (listenerIds: string[]) => {
+        console.log('Connecting to existing listeners:', listenerIds);
+        listenerIds.forEach(userId => {
+          handleUserJoined({ userId });
+        });
+      });
       
     } catch (err: any) {
       console.error("Error processing audio file:", err);
@@ -247,10 +248,13 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       localStreamRef.current = audioStream;
       setIsStreaming(true);
 
-      // Now we wait for users to join (handled in separate effect) or if they are already there?
-      // In this simple MVP, existing users might need to reconnect, but let's handle new joins.
-      // Actually, for active rooms, the server should tell us who is there, but purely reactive is easier.
-      // We rely on 'user-joined' event which the server sends when a listener enters.
+      // Connect to existing peers in the room
+      socket.emit('request-active-listeners', room.id, (listenerIds: string[]) => {
+        console.log('Connecting to existing listeners:', listenerIds);
+        listenerIds.forEach(userId => {
+          handleUserJoined({ userId });
+        });
+      });
 
     } catch (err: any) {
       console.error("Error starting stream:", err);

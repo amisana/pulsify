@@ -81,6 +81,18 @@ io.on('connection', (socket) => {
     broadcastLobbyUpdate();
   });
 
+  // Host asks for list of listeners to connect to (e.g. when starting stream late)
+  socket.on('request-active-listeners', (roomId, callback) => {
+    const room = rooms.get(roomId);
+    if (room && room.hostId === socket.id) {
+      // Return all listener IDs except the host
+      const listeners = Array.from(room.listeners).filter(id => id !== socket.id);
+      callback(listeners);
+    } else {
+      callback([]);
+    }
+  });
+
   socket.on('leave-room', (roomId) => {
     handleLeaveRoom(socket, roomId);
   });
