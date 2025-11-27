@@ -110,6 +110,21 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Listener asks if stream is active (on join)
+  socket.on('check-stream-status', ({ roomId }) => {
+    const room = rooms.get(roomId);
+    if (room && room.hostId) {
+      io.to(room.hostId).emit('check-stream-status', { requesterId: socket.id });
+    }
+  });
+
+  // Host replies yes, triggering listener to request connection
+  socket.on('stream-status-reply', ({ requesterId, isStreaming }) => {
+    if (isStreaming) {
+      io.to(requesterId).emit('host-start-stream');
+    }
+  });
+
   // --- Chat ---
   
   socket.on('send-message', ({ roomId, text }) => {

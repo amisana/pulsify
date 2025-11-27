@@ -82,6 +82,11 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       }
     });
 
+    // Check status on join
+    if (!user.isHost) {
+      socket.emit('check-stream-status', { roomId: room.id });
+    }
+
     return () => {
       socket.off(SocketEvents.NEW_MESSAGE);
       socket.off(SocketEvents.USER_LEFT);
@@ -382,12 +387,20 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
        handleUserJoined({ userId: listenerId });
     });
 
+    // Handle status check from new listeners
+    socket.on('check-stream-status', ({ requesterId }: { requesterId: string }) => {
+      if (isStreaming) {
+        socket.emit('stream-status-reply', { requesterId, isStreaming: true });
+      }
+    });
+
     return () => {
       socket.off(SocketEvents.USER_JOINED);
       socket.off(SocketEvents.WEBRTC_SIGNAL);
       socket.off(SocketEvents.LISTENER_REQUEST_CONNECTION);
+      socket.off('check-stream-status');
     };
-  }, [socket, user.isHost, createPeerConnection]);
+  }, [socket, user.isHost, createPeerConnection, isStreaming]);
 
   // --- Cleanup on unmount ---
   useEffect(() => {
