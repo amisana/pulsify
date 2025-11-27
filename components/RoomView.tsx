@@ -11,7 +11,11 @@ interface RoomViewProps {
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' }, // Public STUN server
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ],
 };
 
@@ -21,6 +25,7 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
   const [isMuted, setIsMuted] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<string>('IDLE');
 
   // WebRTC Refs
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -310,6 +315,13 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
     };
 
     peersRef.current[targetUserId] = pc;
+
+    // Monitor Connection State
+    pc.oniceconnectionstatechange = () => {
+      console.log(`ICE State: ${pc.iceConnectionState}`);
+      setConnectionStatus(pc.iceConnectionState.toUpperCase());
+    };
+
     return pc;
   }, [socket]);
 
@@ -465,8 +477,16 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
               <p className="text-gray-400 text-sm uppercase tracking-widest">
                 {user.isHost 
                   ? ">> INITIATE UPLINK SEQUENCE <<" 
-                  : ">> AWAITING SIGNAL LOCK <<"}
+                  : `>> STATUS: ${connectionStatus} <<`}
               </p>
+              {!user.isHost && !isStreaming && (
+                <button 
+                  onClick={() => socket.emit(SocketEvents.LISTENER_REQUEST_CONNECTION, { roomId: room.id })}
+                  className="mt-4 btn-retro px-4 py-2 text-[10px]"
+                >
+                  FORCE_RETRY_HANDSHAKE
+                </button>
+              )}
             </div>
 
             {user.isHost && (
