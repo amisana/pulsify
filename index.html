@@ -3,45 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>dAUXimity</title>
+    <title>Pulse</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              mono: ['"Space Mono"', 'monospace'],
-            },
-            colors: {
-              'neon-yellow': '#ffff00',
-              'neon-green': '#00ff00',
-              'neon-pink': '#ff00ff',
-              'neon-blue': '#00ffff',
-              'dark-bg': '#050505',
-              'panel-bg': '#0a0a0a',
-            },
-            animation: {
-              'marquee': 'marquee 25s linear infinite',
-              'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-              marquee: {
-                '0%': { transform: 'translateX(100%)' },
-                '100%': { transform: 'translateX(-100%)' },
-              }
-            }
-          }
-        }
-      }
-    </script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <link rel="stylesheet" href="/index.css">
+  </head>
   <body>
     <div id="root"></div>
     <div class="noise-overlay"></div>
     <div class="crt-scanline"></div>
-    <div class="crt-vignette"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>

@@ -1,17 +1,24 @@
 import React from 'react';
 
-export const GlitchLogo: React.FC = () => {
+interface GlitchLogoProps {
+  size?: 'sm' | 'md' | 'lg';
+}
+
+export const GlitchLogo: React.FC<GlitchLogoProps> = ({ size = 'md' }) => {
+  const sizeClasses = {
+    sm: 'text-2xl',
+    md: 'text-4xl md:text-5xl',
+    lg: 'text-6xl md:text-8xl'
+  };
+
   return (
-    <div className="relative group cursor-pointer select-none">
+    <div className="relative inline-block">
       <h1 
-        className="text-4xl font-bold tracking-tighter italic font-mono glitch-text text-white mix-blend-screen"
-        data-text="dAUXimity"
+        className={`glitch-logo ${sizeClasses[size]}`}
+        data-text="pulse"
       >
-        dAUXimity
+        pulse
       </h1>
-      <div className="absolute -bottom-2 right-0 text-[10px] text-neon-blue tracking-[0.3em] opacity-70 group-hover:animate-pulse">
-        SIGNAL_V.2.0
-      </div>
     </div>
   );
 };

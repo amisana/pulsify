@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Room } from '../types';
+import { GlitchLogo } from './GlitchLogo';
 
 interface LobbyProps {
   rooms: Room[];
@@ -7,14 +8,27 @@ interface LobbyProps {
   onJoinRoom: (roomId: string) => void;
 }
 
+// Live badge with animated bars
+const LiveBadge: React.FC = () => (
+  <div className="live-badge">
+    <div className="bars">
+      <div className="bar"></div>
+      <div className="bar"></div>
+      <div className="bar"></div>
+      <div className="bar"></div>
+    </div>
+    <span>LIVE</span>
+  </div>
+);
+
 export const Lobby: React.FC<LobbyProps> = ({ rooms, onCreateRoom, onJoinRoom }) => {
   const [newRoomName, setNewRoomName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomName.trim()) return;
     onCreateRoom(newRoomName);
+    setNewRoomName('');
   };
 
   const formatTimeAgo = (timestamp: number) => {
@@ -25,98 +39,168 @@ export const Lobby: React.FC<LobbyProps> = ({ rooms, onCreateRoom, onJoinRoom })
     return `${hours}h ago`;
   };
 
+  // Separate demo rooms from user rooms
+  const demoRooms = rooms.filter(r => r.isDemo);
+  const userRooms = rooms.filter(r => !r.isDemo);
+
   return (
-    <div className="w-full">
-      {/* Controls */}
-      <div className="flex flex-wrap justify-between items-center mb-12 gap-6 border-b border-gray-800 pb-6 relative">
-        <div className="absolute -bottom-1 left-0 w-1/3 h-[1px] bg-neon-yellow"></div>
-        <div className="flex gap-6 items-center">
-           <button 
-             onClick={() => setIsCreating(true)}
-             className="btn-retro px-6 py-3 text-sm tracking-wider"
-           >
-             ▲ HOST A ROOM
-           </button>
-           <div className="text-gray-500 self-center hidden sm:block font-mono text-xs tracking-widest opacity-60">
-             // SYSTEM_READY
-             <br/>
-             // WAITING_FOR_INPUT
-           </div>
-        </div>
+    <div className="min-h-screen bg-dark p-4 md:p-8">
+      {/* Header */}
+      <header className="text-center mb-12">
+        <GlitchLogo size="lg" />
         
-        <div className="flex gap-2 text-xs text-neon-blue font-mono items-center bg-gray-900/50 px-3 py-1 border border-gray-800">
-           <div className="w-2 h-2 bg-neon-blue rounded-full animate-pulse"></div>
-           <span>ACTIVE SIGNALS: {rooms.length.toString().padStart(2, '0')}</span>
+        {/* Create Room Form */}
+        <form onSubmit={handleSubmit} className="mt-8 flex justify-center gap-2 max-w-md mx-auto">
+          <input 
+            type="text"
+            value={newRoomName}
+            onChange={(e) => setNewRoomName(e.target.value)}
+            placeholder="Enter room name"
+            className="input-field flex-1"
+          />
+          <button type="submit" className="btn-primary">
+            HOST
+          </button>
+        </form>
+      </header>
+
+      {/* Scrolling Banner */}
+      <div className="marquee-container mb-8">
+        <div className="marquee-content text-red">
+          <span>▼ JOIN A ROOM ▼</span>
+          <span>•</span>
+          <span>▲ HOST A ROOM ▲</span>
+          <span>•</span>
+          <span>▼ JOIN A ROOM ▼</span>
+          <span>•</span>
+          <span>▲ HOST A ROOM ▲</span>
+          <span>•</span>
+          <span>▼ JOIN A ROOM ▼</span>
+          <span>•</span>
+          <span>▲ HOST A ROOM ▲</span>
+          <span>•</span>
+          <span>▼ JOIN A ROOM ▼</span>
+          <span>•</span>
+          <span>▲ HOST A ROOM ▲</span>
+          <span>•</span>
         </div>
       </div>
 
-      {/* Creation Form */}
-      {isCreating && (
-        <form onSubmit={handleSubmit} className="mb-12 tech-border p-6 relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-neon-yellow to-transparent opacity-50"></div>
-          <label className="block text-neon-yellow text-xs mb-2 uppercase tracking-widest">Room Designation</label>
-          <div className="flex gap-2">
-            <input 
-              type="text" 
-              value={newRoomName}
-              onChange={(e) => setNewRoomName(e.target.value)}
-              className="bg-black/50 border border-gray-600 text-white p-3 flex-1 focus:border-neon-yellow focus:outline-none font-mono placeholder-gray-700"
-              placeholder="ENTER_PROTOCOL_NAME..."
-              autoFocus
-            />
-            <button type="submit" className="btn-retro px-6 py-2 text-xs">
-              Initialize
-            </button>
-            <button type="button" onClick={() => setIsCreating(false)} className="text-gray-500 px-6 hover:text-white uppercase text-xs tracking-widest border border-transparent hover:border-gray-700 transition-all">
-              Cancel
-            </button>
-          </div>
-        </form>
-      )}
-
-      {/* Room List */}
-      <div className="grid gap-4">
+      {/* Room Grid */}
+      <div className="max-w-6xl mx-auto">
         {rooms.length === 0 ? (
-          <div className="text-center py-24 text-gray-600 font-mono border border-dashed border-gray-800 relative overflow-hidden group">
-            <div className="absolute inset-0 bg-scanlines opacity-10 pointer-events-none"></div>
-            <div className="glitch-text text-xl mb-2 opacity-50">NO ACTIVE TRANSMISSIONS</div>
-            <div className="text-xs uppercase tracking-widest">Be the first to break the silence</div>
+          <div className="text-center py-24 text-muted">
+            <p className="text-xl mb-2">NO ACTIVE TRANSMISSIONS</p>
+            <p className="text-sm">Be the first to host a room</p>
           </div>
         ) : (
-          rooms.map(room => (
-            <div 
-              key={room.id}
-              className="industrial-panel p-5 hover:border-neon-green transition-all cursor-pointer group relative overflow-hidden"
-              onClick={() => onJoinRoom(room.id)}
-            >
-              <div className="absolute top-0 right-0 p-1 opacity-20 group-hover:opacity-100 transition-opacity">
-                <div className="w-2 h-2 bg-neon-green rounded-full"></div>
-              </div>
-              
-              <div className="flex justify-between items-center relative z-10">
-                <div>
-                  <h3 className="text-2xl font-bold text-white mb-1 group-hover:text-neon-green transition-colors font-mono tracking-tighter">
-                    {room.name}
-                  </h3>
-                  <div className="flex gap-6 text-xs text-gray-500 font-mono uppercase tracking-wide">
-                     <span className="flex items-center gap-2">
-                       <span className="text-neon-pink">●</span> LSTN: {room.listenerCount.toString().padStart(2, '0')}
-                     </span>
-                     <span className="flex items-center gap-2">
-                       <span className="text-neon-blue">●</span> AGE: {formatTimeAgo(room.createdAt)}
-                     </span>
-                  </div>
-                </div>
-                <div className="border border-gray-800 p-3 group-hover:border-neon-green group-hover:bg-neon-green/10 group-hover:text-neon-green text-gray-600 transition-all transform group-hover:translate-x-1">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 5l7 7-7 7M5 5l7 7-7 7" /></svg>
-                </div>
-              </div>
-              
-              {/* Decorative Corner Lines */}
-              <div className="absolute bottom-0 left-0 w-4 h-4 border-b border-l border-gray-800 group-hover:border-neon-green transition-colors"></div>
-            </div>
-          ))
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Demo rooms first */}
+            {demoRooms.map(room => (
+              <RoomCard 
+                key={room.id} 
+                room={room} 
+                onJoin={() => onJoinRoom(room.id)}
+                formatTimeAgo={formatTimeAgo}
+              />
+            ))}
+            {/* User rooms */}
+            {userRooms.map(room => (
+              <RoomCard 
+                key={room.id} 
+                room={room} 
+                onJoin={() => onJoinRoom(room.id)}
+                formatTimeAgo={formatTimeAgo}
+              />
+            ))}
+          </div>
         )}
+      </div>
+
+      {/* Footer Ticker */}
+      <div className="footer-ticker">
+        <div className="marquee-content">
+          <span>YOUR OLDEST FEARS ARE THE WORST ONES</span>
+          <span>•</span>
+          <span>IT IS UNFAIR TO TEAR SOMEBODY APART</span>
+          <span>•</span>
+          <span>© 2025 PULSE</span>
+          <span>•</span>
+          <span>TERMS</span>
+          <span>•</span>
+          <span>YOUR OLDEST FEARS ARE THE WORST ONES</span>
+          <span>•</span>
+          <span>IT IS UNFAIR TO TEAR SOMEBODY APART</span>
+          <span>•</span>
+          <span>© 2025 PULSE</span>
+          <span>•</span>
+          <span>TERMS</span>
+          <span>•</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Room Card Component
+interface RoomCardProps {
+  room: Room;
+  onJoin: () => void;
+  formatTimeAgo: (timestamp: number) => string;
+}
+
+const RoomCard: React.FC<RoomCardProps> = ({ room, onJoin, formatTimeAgo }) => {
+  const isLive = room.status === 'active' || room.isDemo;
+  
+  return (
+    <div 
+      className={`room-card ${room.isDemo ? 'demo' : ''}`}
+      onClick={onJoin}
+    >
+      <div className="flex justify-between items-start mb-3">
+        <h3 className="text-cyan text-lg font-medium tracking-tight uppercase">
+          {room.name}
+        </h3>
+        {isLive && <LiveBadge />}
+      </div>
+      
+      <div className="flex items-center gap-4 text-xs text-muted mb-3">
+        <span className="flex items-center gap-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
+          </svg>
+          {room.listenerCount}
+        </span>
+        <span className="flex items-center gap-1">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd"/>
+          </svg>
+          {formatTimeAgo(room.createdAt)}
+        </span>
+      </div>
+
+      {/* Now Playing placeholder - would come from actual stream data */}
+      {room.isDemo && (
+        <div className="now-playing truncate">
+          {room.name.includes('NTS') && 'Live Radio Stream'}
+          {room.name.includes('Groove') && 'Ambient / Chill'}
+          {room.name.includes('DEF') && 'Hacker Music'}
+          {room.name.includes('Lofi') && 'Lo-fi Beats'}
+        </div>
+      )}
+
+      {/* Action icons */}
+      <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-[var(--border)]">
+        <button className="icon-btn" title="History">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+        </button>
+        <button className="icon-btn" title="Share">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+          </svg>
+        </button>
       </div>
     </div>
   );
