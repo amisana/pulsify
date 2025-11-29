@@ -1,0 +1,27 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Development files
+node_modules
+*.log
+npm-debug.log*
+
+# Editor/IDE
+.vscode
+.idea
+*.sw?
+.DS_Store
+
+# Git
+.git
+.gitignore
+
+# Documentation (optional, remove if you want README on Vercel)
+README.md
+
+# Server-side only (Railway handles this)
+server.js
+nixpacks.toml
+
