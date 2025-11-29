@@ -10,6 +10,16 @@ export interface Room {
   listenerCount: number;
   createdAt: number;
   status: 'active' | 'waiting';
+  isDemo?: boolean;
+  streamUrl?: string; // For demo rooms with external streams
+}
+
+export interface NowPlaying {
+  title: string;
+  artist: string;
+  album?: string;
+  artwork?: string;
+  recognizedAt: number;
 }
 
 export interface Message {

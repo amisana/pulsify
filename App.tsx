@@ -86,6 +86,29 @@ const App: React.FC = () => {
     socket.emit(SocketEvents.JOIN_LOBBY);
   };
 
+  // Feature 1: Switch rooms directly from inside a room
+  const handleSwitchRoom = (roomId: string) => {
+    if (!socket || !currentRoom) return;
+    // Leave current room first
+    socket.emit(SocketEvents.LEAVE_ROOM, currentRoom.id);
+    // Join new room
+    socket.emit(SocketEvents.JOIN_ROOM, roomId, (response: { room: Room, success: boolean, message?: string }) => {
+      if (response.success) {
+        setShowJackIn(true);
+        setTimeout(() => {
+          setCurrentRoom(response.room);
+          setUser(prev => prev ? { ...prev, isHost: response.room.hostId === socket.id } : null);
+        }, 500);
+      } else {
+        // If join failed, go back to lobby
+        setCurrentRoom(null);
+        setUser(prev => prev ? { ...prev, isHost: false } : null);
+        socket.emit(SocketEvents.JOIN_LOBBY);
+        alert(response.message || "Failed to switch rooms.");
+      }
+    });
+  };
+
   if (!isConnected) {
     return (
       <div className="flex items-center justify-center h-screen bg-black text-neon-yellow font-mono flex-col gap-4">
@@ -113,6 +136,7 @@ const App: React.FC = () => {
           room={currentRoom} 
           user={user!} 
           onLeave={handleLeaveRoom}
+          onSwitchRoom={handleSwitchRoom}
         />
       ) : (
         <Lobby 

@@ -20,8 +20,58 @@ const io = new Server(server, {
 });
 
 // In-memory storage
-// Room structure: { id, name, hostId, listeners: Set<socketId>, createdAt }
+// Room structure: { id, name, hostId, listeners: Set<socketId>, createdAt, isDemo?, streamUrl? }
 const rooms = new Map();
+
+// --- Feature 4: Create 24/7 Demo Rooms on startup ---
+const DEMO_ROOMS = [
+  {
+    id: 'demo-nts-1',
+    name: 'NTS Radio 1',
+    streamUrl: 'https://stream-relay-geo.ntslive.net/stream',
+    hostId: 'SYSTEM',
+    listeners: new Set(),
+    createdAt: Date.now(),
+    status: 'active',
+    isDemo: true
+  },
+  {
+    id: 'demo-soma-groove',
+    name: 'SomaFM Groove Salad',
+    streamUrl: 'https://ice2.somafm.com/groovesalad-128-mp3',
+    hostId: 'SYSTEM',
+    listeners: new Set(),
+    createdAt: Date.now(),
+    status: 'active',
+    isDemo: true
+  },
+  {
+    id: 'demo-soma-defcon',
+    name: 'SomaFM DEF CON Radio',
+    streamUrl: 'https://ice2.somafm.com/defcon-128-mp3',
+    hostId: 'SYSTEM',
+    listeners: new Set(),
+    createdAt: Date.now(),
+    status: 'active',
+    isDemo: true
+  },
+  {
+    id: 'demo-lofi',
+    name: 'Lofi Girl Radio',
+    streamUrl: 'https://play.streamafrica.net/lofiradio',
+    hostId: 'SYSTEM',
+    listeners: new Set(),
+    createdAt: Date.now(),
+    status: 'active',
+    isDemo: true
+  }
+];
+
+// Initialize demo rooms
+DEMO_ROOMS.forEach(room => {
+  rooms.set(room.id, room);
+});
+console.log(`Initialized ${DEMO_ROOMS.length} demo rooms`);
 
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
@@ -152,6 +202,15 @@ io.on('connection', (socket) => {
   function handleLeaveRoom(socket, roomId) {
     const room = rooms.get(roomId);
     if (!room) return;
+
+    // Demo rooms never get deleted
+    if (room.isDemo) {
+      room.listeners.delete(socket.id);
+      socket.leave(roomId);
+      io.to(roomId).emit('user-left', { userId: socket.id });
+      broadcastLobbyUpdate();
+      return;
+    }
 
     if (room.hostId === socket.id) {
       // Host left, destroy room

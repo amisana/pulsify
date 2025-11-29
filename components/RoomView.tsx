@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { Room, User, Message, SocketEvents, WebRTCMessage } from '../types';
+import { Room, User, Message, SocketEvents, NowPlaying } from '../types';
 import { Socket } from 'socket.io-client';
 
 interface RoomViewProps {
@@ -7,6 +7,7 @@ interface RoomViewProps {
   room: Room;
   user: User;
   onLeave: () => void;
+  onSwitchRoom?: (roomId: string) => void;
 }
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -19,21 +20,42 @@ const RTC_CONFIG: RTCConfiguration = {
   ],
 };
 
-export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave }) => {
+// AudD API for music recognition
+const AUDD_API_URL = 'https://api.audd.io/';
+
+export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave, onSwitchRoom }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isMuted, setIsMuted] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('IDLE');
+  
+  // Feature 1: Lobby sidebar
+  const [lobbyRooms, setLobbyRooms] = useState<Room[]>([]);
+  const [showLobby, setShowLobby] = useState(false);
+  
+  // Feature 2: Push-to-talk
+  const [isPTTActive, setIsPTTActive] = useState(false);
+  const [pttEnabled, setPttEnabled] = useState(false);
+  const micStreamRef = useRef<MediaStream | null>(null);
+  const micGainRef = useRef<GainNode | null>(null);
+  
+  // Feature 3: Music Recognition
+  const [nowPlaying, setNowPlaying] = useState<NowPlaying | null>(null);
+  const [isRecognizing, setIsRecognizing] = useState(false);
+  const lastRecognizedRef = useRef<string>('');
+  const recognitionIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // WebRTC Refs
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<{ [userId: string]: RTCPeerConnection }>({});
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const demoAudioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null);
+  const destinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
 
   // Chat scroll ref
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -42,6 +64,19 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // --- Feature 1: Listen to lobby updates ---
+  useEffect(() => {
+    socket.emit(SocketEvents.JOIN_LOBBY);
+    
+    socket.on(SocketEvents.ROOM_LIST, (rooms: Room[]) => {
+      setLobbyRooms(rooms.filter(r => r.id !== room.id));
+    });
+    
+    return () => {
+      socket.off(SocketEvents.ROOM_LIST);
+    };
+  }, [socket, room.id]);
 
   // --- Socket Event Listeners for Chat & Logic ---
   useEffect(() => {
@@ -94,6 +129,92 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
     };
   }, [socket, user.isHost, room.id]);
 
+  // --- Feature 3: Music Recognition ---
+  const recognizeMusic = useCallback(async () => {
+    if (!audioRef.current?.srcObject && !demoAudioRef.current) return;
+    
+    try {
+      setIsRecognizing(true);
+      
+      // For demo rooms, we can't easily capture audio from external stream
+      // For WebRTC streams, we capture from the audio context
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      const audioContext = audioContextRef.current;
+      let sourceNode: MediaStreamAudioSourceNode | MediaElementAudioSourceNode;
+      
+      if (audioRef.current?.srcObject) {
+        sourceNode = audioContext.createMediaStreamSource(audioRef.current.srcObject as MediaStream);
+      } else if (demoAudioRef.current) {
+        sourceNode = audioContext.createMediaElementSource(demoAudioRef.current);
+      } else {
+        return;
+      }
+      
+      // Record a short sample
+      const destination = audioContext.createMediaStreamDestination();
+      sourceNode.connect(destination);
+      
+      const mediaRecorder = new MediaRecorder(destination.stream);
+      const chunks: Blob[] = [];
+      
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        
+        // Convert to base64 for AudD API
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const base64 = (reader.result as string).split(',')[1];
+          
+          try {
+            // Note: This requires an API key in production
+            const response = await fetch(AUDD_API_URL, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: new URLSearchParams({
+                api_token: import.meta.env.VITE_AUDD_API_KEY || 'test',
+                audio: base64,
+                return: 'apple_music,spotify'
+              })
+            });
+            
+            const data = await response.json();
+            
+            if (data.result) {
+              const songKey = `${data.result.artist}-${data.result.title}`;
+              
+              // Deduplication: Don't show same song twice
+              if (songKey !== lastRecognizedRef.current) {
+                lastRecognizedRef.current = songKey;
+                setNowPlaying({
+                  title: data.result.title,
+                  artist: data.result.artist,
+                  album: data.result.album,
+                  artwork: data.result.apple_music?.artwork?.url?.replace('{w}', '200').replace('{h}', '200'),
+                  recognizedAt: Date.now()
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Music recognition failed:', err);
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+      
+      mediaRecorder.start();
+      setTimeout(() => mediaRecorder.stop(), 5000); // 5 second sample
+      
+    } catch (err) {
+      console.error('Recognition error:', err);
+    } finally {
+      setIsRecognizing(false);
+    }
+  }, []);
+
   // --- HOST Logic: File Streaming ---
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -118,11 +239,12 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       }
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
-      source.loop = true; // Loop for now
+      source.loop = true;
       sourceNodeRef.current = source;
 
       // Create destination for WebRTC
       const destination = audioContext.createMediaStreamDestination();
+      destinationRef.current = destination;
       source.connect(destination);
       
       // Also connect to local output so host can hear
@@ -144,18 +266,66 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
     }
   };
 
+  // --- Feature 2: Push-to-Talk ---
+  const setupPTT = async () => {
+    try {
+      const micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        }
+      });
+      micStreamRef.current = micStream;
+      
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      
+      const audioContext = audioContextRef.current;
+      const micSource = audioContext.createMediaStreamSource(micStream);
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = 0; // Start muted
+      micGainRef.current = gainNode;
+      
+      micSource.connect(gainNode);
+      
+      // If we have a destination, connect mic to it
+      if (destinationRef.current) {
+        gainNode.connect(destinationRef.current);
+      }
+      
+      setPttEnabled(true);
+    } catch (err) {
+      console.error('Failed to setup PTT:', err);
+      setError('Failed to access microphone for Push-to-Talk');
+    }
+  };
+
+  const handlePTTDown = () => {
+    if (micGainRef.current) {
+      micGainRef.current.gain.value = 1;
+      setIsPTTActive(true);
+    }
+  };
+
+  const handlePTTUp = () => {
+    if (micGainRef.current) {
+      micGainRef.current.gain.value = 0;
+      setIsPTTActive(false);
+    }
+  };
+
   // --- HOST Logic: Screen/Mic Streaming ---
   const startStream = async () => {
     try {
       setError(null);
       
-      // Check browser support
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
       const isChrome = /chrome/i.test(navigator.userAgent) && !/edge/i.test(navigator.userAgent);
       const isEdge = /edge/i.test(navigator.userAgent);
       const isFirefox = /firefox/i.test(navigator.userAgent);
       
-      // Check if we're on HTTPS (required for mediaDevices)
       const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
       
       if (!isSecure) {
@@ -176,7 +346,6 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
         throw new Error(`Screen sharing not available. Please ensure you're using a recent version of ${browserInfo}, or try Chrome/Edge/Firefox.`);
       }
       
-      // Safari has limited support for getDisplayMedia with audio
       if (isSafari) {
         const useMic = window.confirm(
           "Safari has limited support for system audio sharing.\n\n" +
@@ -201,15 +370,12 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
             throw new Error("Microphone access denied. Please allow microphone permissions.");
           }
         } else {
-          return; // User cancelled
+          return;
         }
       }
 
-      // For audio sharing in browsers, we generally need getDisplayMedia for system audio
-      // or getUserMedia for microphone. 
-      // To share system audio reliably, 'getDisplayMedia' is often used with video, ignoring the video track.
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true, // Required to trigger the "Share Audio" checkbox in Chrome modal
+        video: true,
         audio: {
           echoCancellation: false,
           noiseSuppression: false,
@@ -217,14 +383,10 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
         }
       });
 
-      // Stop video tracks immediately (we only need audio)
       stream.getVideoTracks().forEach(track => track.stop());
 
-      // We only care about the audio track for dAUXimity
       const audioTrack = stream.getAudioTracks()[0];
       if (!audioTrack) {
-        // User might have cancelled or didn't check "Share tab audio"
-        // Offer fallback to microphone
         const useMic = window.confirm(
           "No system audio detected. This usually means:\n" +
           "1. You didn't check 'Share tab audio' in the share dialog\n" +
@@ -253,17 +415,14 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
         }
       }
 
-      // If user stops sharing via browser UI
       audioTrack.onended = () => {
         stopStream();
       };
 
-      // Create a stream with just audio to send
       const audioStream = new MediaStream([audioTrack]);
       localStreamRef.current = audioStream;
       setIsStreaming(true);
 
-      // Notify waiting listeners that we are ready
       socket.emit(SocketEvents.HOST_START_STREAM, { roomId: room.id });
 
     } catch (err: any) {
@@ -282,10 +441,14 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       sourceNodeRef.current.stop();
       sourceNodeRef.current = null;
     }
-    // Close all peer connections
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(track => track.stop());
+      micStreamRef.current = null;
+    }
     Object.values(peersRef.current).forEach(pc => (pc as RTCPeerConnection).close());
     peersRef.current = {};
     setIsStreaming(false);
+    setPttEnabled(false);
   };
 
   // --- WebRTC Signaling Handling ---
@@ -293,7 +456,6 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
   const createPeerConnection = useCallback((targetUserId: string, stream?: MediaStream) => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
     
-    // ICE Candidates
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         socket.emit(SocketEvents.WEBRTC_SIGNAL, {
@@ -304,24 +466,20 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       }
     };
 
-    // If we are Host, add tracks
     if (stream) {
       stream.getTracks().forEach(track => pc.addTrack(track, stream));
     }
 
-    // If we are Listener, handle incoming track
     pc.ontrack = (event) => {
       if (audioRef.current) {
         audioRef.current.srcObject = event.streams[0];
-        // Autoplay requires interaction usually, but since user joined room, it might work
         audioRef.current.play().catch(e => console.error("Autoplay blocked", e));
-        setIsStreaming(true); // Visually indicate stream active
+        setIsStreaming(true);
       }
     };
 
     peersRef.current[targetUserId] = pc;
 
-    // Monitor Connection State
     pc.oniceconnectionstatechange = () => {
       console.log(`ICE State: ${pc.iceConnectionState}`);
       setConnectionStatus(pc.iceConnectionState.toUpperCase());
@@ -331,7 +489,6 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
   }, [socket]);
 
   useEffect(() => {
-    // HOST: Handle new user joining
     const handleUserJoined = async ({ userId }: { userId: string }) => {
       if (!user.isHost || !localStreamRef.current) return;
       
@@ -348,9 +505,7 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
       });
     };
 
-    // CLIENT/HOST: Handle incoming signals
     const handleSignal = async ({ type, payload, senderId }: { type: string, payload: any, senderId: string }) => {
-      // If we don't have a PC for this sender yet (Client side mostly), create one
       if (!peersRef.current[senderId]) {
         createPeerConnection(senderId);
       }
@@ -381,13 +536,11 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
     socket.on(SocketEvents.USER_JOINED, handleUserJoined);
     socket.on(SocketEvents.WEBRTC_SIGNAL, handleSignal);
     
-    // Handle listener requesting connection (e.g. after host start stream signal)
     socket.on(SocketEvents.LISTENER_REQUEST_CONNECTION, ({ listenerId }: { listenerId: string }) => {
        console.log(`Listener ${listenerId} requested connection`);
        handleUserJoined({ userId: listenerId });
     });
 
-    // Handle status check from new listeners
     socket.on('check-stream-status', ({ requesterId }: { requesterId: string }) => {
       if (isStreaming) {
         socket.emit('stream-status-reply', { requesterId, isStreaming: true });
@@ -406,6 +559,9 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
   useEffect(() => {
     return () => {
       stopStream();
+      if (recognitionIntervalRef.current) {
+        clearInterval(recognitionIntervalRef.current);
+      }
     };
   }, []);
 
@@ -417,14 +573,57 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
     setInputText('');
   };
 
+  // Check if this is a demo room
+  const isDemo = room.isDemo && room.streamUrl;
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)]">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-140px)] relative">
+      
+      {/* --- Feature 1: Lobby Sidebar Overlay --- */}
+      {showLobby && (
+        <div className="absolute top-0 left-0 z-50 w-64 h-full bg-black/95 border-r border-neon-yellow/30 backdrop-blur-sm overflow-hidden">
+          <div className="p-4 border-b border-gray-800">
+            <div className="flex justify-between items-center">
+              <span className="text-neon-yellow font-mono text-xs tracking-widest">ACTIVE_SIGNALS</span>
+              <button onClick={() => setShowLobby(false)} className="text-gray-500 hover:text-red-500 text-xs">[X]</button>
+            </div>
+          </div>
+          <div className="overflow-y-auto h-full p-4 space-y-2">
+            {lobbyRooms.length === 0 ? (
+              <p className="text-gray-600 text-xs font-mono">NO_OTHER_SIGNALS</p>
+            ) : (
+              lobbyRooms.map(r => (
+                <div 
+                  key={r.id}
+                  onClick={() => onSwitchRoom?.(r.id)}
+                  className="p-3 border border-gray-800 hover:border-neon-yellow cursor-pointer transition-all group"
+                >
+                  <div className="flex items-center gap-2">
+                    {r.isDemo && <span className="text-[8px] px-1 bg-neon-blue/20 text-neon-blue border border-neon-blue/30">24/7</span>}
+                    <span className="text-white font-mono text-xs group-hover:text-neon-yellow">{r.name}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-600 mt-1">{r.listenerCount} CONNECTED</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Toggle Lobby Button */}
+      <button 
+        onClick={() => setShowLobby(!showLobby)}
+        className="absolute top-2 left-2 z-40 btn-retro px-2 py-1 text-[10px]"
+      >
+        {showLobby ? 'HIDE' : 'LOBBY'} [{lobbyRooms.length}]
+      </button>
+
       {/* --- Left Panel: Room Info & Stream Controls --- */}
       <div className="md:col-span-2 flex flex-col gap-4 h-full">
         <div className="industrial-panel p-8 relative flex-1 flex flex-col justify-center items-center border border-gray-800 bg-black/80 backdrop-blur-sm">
           {/* Technical Overlay Graphics */}
           <div className="absolute top-4 left-4 right-4 flex justify-between text-[10px] font-mono text-gray-600 uppercase tracking-widest pointer-events-none">
-             <span>PROTOCOL: {room.name}</span>
+             <span>PROTOCOL: {room.name} {isDemo && '[DEMO]'}</span>
              <span>SIGNAL_INTEGRITY: {isStreaming ? '100%' : '0%'}</span>
           </div>
           <div className="absolute bottom-4 left-4 text-[10px] font-mono text-gray-600 uppercase tracking-widest pointer-events-none">
@@ -437,10 +636,24 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
           <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-neon-yellow opacity-50"></div>
           <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-neon-yellow opacity-50"></div>
 
+          {/* --- Feature 3: Now Playing Display --- */}
+          {nowPlaying && (
+            <div className="absolute top-12 left-4 right-4 flex items-center gap-4 p-3 bg-black/80 border border-neon-green/30">
+              {nowPlaying.artwork && (
+                <img src={nowPlaying.artwork} alt="Album art" className="w-12 h-12 object-cover" />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-neon-green font-mono text-sm truncate">{nowPlaying.title}</div>
+                <div className="text-gray-400 font-mono text-xs truncate">{nowPlaying.artist}</div>
+                {nowPlaying.album && <div className="text-gray-600 font-mono text-[10px] truncate">{nowPlaying.album}</div>}
+              </div>
+              <div className="text-[8px] text-gray-600 font-mono">NOW_PLAYING</div>
+            </div>
+          )}
           
           {/* Visualizer / Status */}
           <div className="flex flex-col items-center gap-8 z-10">
-            {isStreaming ? (
+            {isStreaming || isDemo ? (
               <div className="relative group cursor-pointer">
                 <div className="w-48 h-48 rounded-full border-4 border-neon-green flex items-center justify-center animate-pulse shadow-[0_0_50px_#00ff00] bg-black relative z-10">
                    <div className="absolute inset-2 rounded-full border border-neon-green opacity-50 border-dashed animate-[spin_10s_linear_infinite]"></div>
@@ -472,7 +685,6 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
             ) : (
                <div className="w-48 h-48 rounded-full border-4 border-gray-800 flex items-center justify-center text-gray-700 relative">
                  <div className="absolute inset-2 rounded-full border border-gray-800/50 border-dashed"></div>
-                 {/* Muted SVG */}
                  <svg className="w-24 h-24 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
                    <line x1="1" y1="1" x2="23" y2="23"></line>
                    <path d="M9 9v6a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"></path>
@@ -484,15 +696,15 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
             )}
             
             <div className="text-center font-mono">
-              <h2 className={`text-3xl font-bold mb-2 tracking-tighter ${isStreaming ? 'text-neon-green glitch-text' : 'text-gray-500'}`}>
-                {isStreaming ? 'TRANSMISSION ACTIVE' : 'WAITING FOR HOST...'}
+              <h2 className={`text-3xl font-bold mb-2 tracking-tighter ${isStreaming || isDemo ? 'text-neon-green glitch-text' : 'text-gray-500'}`}>
+                {isStreaming || isDemo ? 'TRANSMISSION ACTIVE' : 'WAITING FOR HOST...'}
               </h2>
               <p className="text-gray-400 text-sm uppercase tracking-widest">
                 {user.isHost 
                   ? ">> INITIATE UPLINK SEQUENCE <<" 
                   : `>> STATUS: ${connectionStatus} <<`}
               </p>
-              {!user.isHost && !isStreaming && (
+              {!user.isHost && !isStreaming && !isDemo && (
                 <button 
                   onClick={() => socket.emit(SocketEvents.LISTENER_REQUEST_CONNECTION, { roomId: room.id })}
                   className="mt-4 btn-retro px-4 py-2 text-[10px]"
@@ -502,7 +714,18 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
               )}
             </div>
 
-            {user.isHost && (
+            {/* Demo Room Audio Player */}
+            {isDemo && room.streamUrl && (
+              <audio 
+                ref={demoAudioRef}
+                src={room.streamUrl} 
+                autoPlay 
+                controls
+                className="w-full max-w-xs"
+              />
+            )}
+
+            {user.isHost && !isDemo && (
                !isStreaming ? (
                  <div className="flex flex-col gap-4 w-full max-w-xs">
                    <button 
@@ -535,13 +758,47 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
                    </button>
                  </div>
                ) : (
-                 <button 
-                   onClick={stopStream}
-                   className="btn-retro px-8 py-4 border-red-500 text-red-500 hover:bg-red-500 hover:text-black font-bold text-xl tracking-widest hover:shadow-[0_0_30px_#ff0000]"
-                 >
-                   TERMINATE UPLINK
-                 </button>
+                 <div className="flex flex-col gap-4 items-center">
+                   <button 
+                     onClick={stopStream}
+                     className="btn-retro px-8 py-4 border-red-500 text-red-500 hover:bg-red-500 hover:text-black font-bold text-xl tracking-widest hover:shadow-[0_0_30px_#ff0000]"
+                   >
+                     TERMINATE UPLINK
+                   </button>
+                   
+                   {/* Feature 2: Push-to-Talk */}
+                   {!pttEnabled ? (
+                     <button 
+                       onClick={setupPTT}
+                       className="btn-retro px-4 py-2 text-xs border-neon-blue text-neon-blue"
+                     >
+                       ENABLE PUSH_TO_TALK
+                     </button>
+                   ) : (
+                     <button 
+                       onMouseDown={handlePTTDown}
+                       onMouseUp={handlePTTUp}
+                       onMouseLeave={handlePTTUp}
+                       onTouchStart={handlePTTDown}
+                       onTouchEnd={handlePTTUp}
+                       className={`btn-retro px-6 py-4 text-sm font-bold ${isPTTActive ? 'bg-red-500 text-black border-red-500 shadow-[0_0_30px_#ff0000]' : 'border-gray-600 text-gray-400'}`}
+                     >
+                       {isPTTActive ? 'TRANSMITTING...' : 'HOLD TO TALK'}
+                     </button>
+                   )}
+                 </div>
                )
+            )}
+            
+            {/* Feature 3: Music Recognition Button */}
+            {(isStreaming || isDemo) && !user.isHost && (
+              <button 
+                onClick={recognizeMusic}
+                disabled={isRecognizing}
+                className="btn-retro px-4 py-2 text-xs border-purple-500 text-purple-500 hover:shadow-[0_0_20px_#a855f7] disabled:opacity-50"
+              >
+                {isRecognizing ? 'ANALYZING...' : 'IDENTIFY_TRACK'}
+              </button>
             )}
             
             {error && (
@@ -556,12 +813,13 @@ export const RoomView: React.FC<RoomViewProps> = ({ socket, room, user, onLeave 
           <audio ref={audioRef} autoPlay playsInline muted={isMuted} />
           
           {/* Mute Control for Listeners */}
-          {!user.isHost && isStreaming && (
+          {!user.isHost && (isStreaming || isDemo) && (
              <div className="absolute bottom-8 right-8">
                <button 
                  onClick={() => {
                    setIsMuted(!isMuted);
                    if(audioRef.current) audioRef.current.muted = !isMuted;
+                   if(demoAudioRef.current) demoAudioRef.current.muted = !isMuted;
                  }}
                  className="btn-retro px-4 py-2 text-xs"
                >
