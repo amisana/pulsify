@@ -74,5 +74,20 @@ dAUXimity is a retro-cyberpunk aesthetic web application for creating and joinin
 - **Backend**: Node.js, Express, Socket.io
 - **Protocol**: WebRTC, WebSocket
 
+Stack: LiveKit (WebRTC), Next.js, Node.js, Neon Postgres, AudD for music recognition.
+What's new in 2.0:
+
+Stream from browser tab or system audio (BlackHole/VB-Cable)
+
+Music recognition with automatic deduplication and "winner selection"
+
+24/7 demo rooms (NTS Radio, SomaFM, and yes... Money For Nothing on loop)
+
+See Lobby rooms from inside a room
+
+Push-to-talk overlay for hosts
+
+
+
 ---
 *STERILIZATION IS A WEAPON OF THE RULERS • FREEDOM IS A LUXURY NOT A RIGHT*

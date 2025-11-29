@@ -44,7 +44,7 @@ export const Lobby: React.FC<LobbyProps> = ({ rooms, onCreateRoom, onJoinRoom })
   const userRooms = rooms.filter(r => !r.isDemo);
 
   return (
-    <div className="min-h-screen bg-dark p-4 md:p-8">
+    <div className="min-h-screen bg-[#0a0a0a] p-4 md:p-8 pb-20">
       {/* Header */}
       <header className="text-center mb-12">
         <GlitchLogo size="lg" />
@@ -154,17 +154,17 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onJoin, formatTimeAgo }) => {
   
   return (
     <div 
-      className={`room-card ${room.isDemo ? 'demo' : ''}`}
+      className="bg-[#111] border border-[#1a1a1a] p-4 cursor-pointer hover:border-[#00ffff] transition-all"
       onClick={onJoin}
     >
       <div className="flex justify-between items-start mb-3">
-        <h3 className="text-cyan text-lg font-medium tracking-tight uppercase">
+        <h3 className="text-[#00ffff] text-base font-medium tracking-tight uppercase">
           {room.name}
         </h3>
         {isLive && <LiveBadge />}
       </div>
       
-      <div className="flex items-center gap-4 text-xs text-muted mb-3">
+      <div className="flex items-center gap-4 text-xs text-[#666] mb-3">
         <span className="flex items-center gap-1">
           <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
             <path d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"/>
@@ -179,9 +179,10 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onJoin, formatTimeAgo }) => {
         </span>
       </div>
 
-      {/* Now Playing placeholder - would come from actual stream data */}
+      {/* Now Playing placeholder */}
       {room.isDemo && (
-        <div className="now-playing truncate">
+        <div className="text-[#00ff88] text-xs flex items-center gap-1">
+          <span>▶</span>
           {room.name.includes('NTS') && 'Live Radio Stream'}
           {room.name.includes('Groove') && 'Ambient / Chill'}
           {room.name.includes('DEF') && 'Hacker Music'}
@@ -190,13 +191,13 @@ const RoomCard: React.FC<RoomCardProps> = ({ room, onJoin, formatTimeAgo }) => {
       )}
 
       {/* Action icons */}
-      <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-[var(--border)]">
-        <button className="icon-btn" title="History">
+      <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-[#1a1a1a]">
+        <button className="w-8 h-8 flex items-center justify-center border border-[#1a1a1a] text-[#666] hover:border-[#00ffff] hover:text-[#00ffff] transition-all" title="History" onClick={(e) => e.stopPropagation()}>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
           </svg>
         </button>
-        <button className="icon-btn" title="Share">
+        <button className="w-8 h-8 flex items-center justify-center border border-[#1a1a1a] text-[#666] hover:border-[#00ffff] hover:text-[#00ffff] transition-all" title="Share" onClick={(e) => e.stopPropagation()}>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
           </svg>
